@@ -129,9 +129,22 @@ const lab = {
   reagent: new Map(),     // lower-cased reagents.csv Label -> Label as written
   assay: new Map(),       // lower-cased assays.csv Name -> Name as written
   source: new Map(),      // samples.csv Label -> Source
+  cold: new Map(),        // samples.csv Label -> its Cold, where the episode
+                          // holds more than this one swab
   tubes: new Set(),       // cdna.csv Tube labels, so a submitted tube can link
   speciesRef: new Map(),  // species.csv Species -> RefSeq, where it has one
 };
+
+/* A sample links into the Inventory's Samples tab as its whole cold episode —
+   this swab plus every other swab of the same illness, which is nearly always
+   what is being asked of a sample here: what else that cold turned up. Samples
+   with no `Cold`, and the single-swab episodes, link as themselves; see the
+   cold-episode note in inventory.js, which draws its sample links the same
+   way. */
+const sampleLink = s => lab.cold.has(s)
+  ? link(s, { tab: "inv-samples", spec: { Cold: [lab.cold.get(s)] } },
+      `Every sample of the cold ${s} belongs to`)
+  : link(s, { tab: "inv-samples", spec: { Label: [s] } }, `${s} in samples.csv`);
 
 /* `None` is not an assay: it is the sentinel for a channel nothing was aimed
    at, kept so the noise on an unused channel can be read next to the real one.
@@ -383,8 +396,7 @@ const views = {
         // a pool is several samples, and each one has its own row over there
         for (const s of pool(val)) {
           if (td.childNodes.length) td.append("+");
-          td.append(link(s, { tab: "inv-samples", spec: { Label: [s] } },
-            `${s} in samples.csv`));
+          td.append(sampleLink(s));
         }
         return true;
       }
@@ -483,8 +495,7 @@ const views = {
       if (c.k === "Sample" && val) {
         for (const s of pool(val)) {
           if (td.childNodes.length) td.append("+");
-          td.append(link(s, { tab: "inv-samples", spec: { Label: [s] } },
-            `${s} in samples.csv`));
+          td.append(sampleLink(s));
         }
         return true;
       }
@@ -968,8 +979,18 @@ function ingest(tables) {
   lab.assay = labels("assays.csv", "Name");
 
   lab.source = new Map();
-  for (const s of tables["samples.csv"]?.rows || []) {
-    if (s.Label) lab.source.set(s.Label, s.Source || "");
+  lab.cold = new Map();
+  const sampleRows = tables["samples.csv"]?.rows || [];
+  const coldSize = new Map();
+  for (const s of sampleRows) {
+    if (!s.Label) continue;
+    lab.source.set(s.Label, s.Source || "");
+    const id = (s.Cold || "").trim();
+    if (id) coldSize.set(id, (coldSize.get(id) || 0) + 1);
+  }
+  for (const s of sampleRows) {
+    const id = (s.Cold || "").trim();
+    if (s.Label && coldSize.get(id) > 1) lab.cold.set(s.Label, id);
   }
   lab.tubes = new Set((tables["cdna.csv"]?.rows || []).map(r => r.Tube).filter(Boolean));
   lab.speciesRef = new Map((tables["species.csv"]?.rows || [])

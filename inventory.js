@@ -25,6 +25,7 @@ const lab = {
   byLabel: new Map(),     // sample label -> [pathogen rows]
   colds: new Map(),       // sample label -> cold-episode id
   coldSpan: new Map(),    // cold-episode id -> its newest date
+  coldSize: new Map(),    // cold-episode id -> how many samples it holds
   assaySpecies: new Map(),// primers.csv: lower-cased Label -> Species
   commensal: new Set(),   // species.csv: Species with Pathogenicity=Commensal
   events: new Map(),      // cdna.csv: tube -> its ledger rows, in file order
@@ -275,14 +276,33 @@ function confirmedSpecies(row, unknown) {
 function findColds(samples) {
   lab.colds = new Map();
   lab.coldSpan = new Map();
+  lab.coldSize = new Map();
   for (const r of samples) {
     const id = (r.Cold || "").trim() || ("untracked:" + r.Label);
     lab.colds.set(r.Label, id);
+    lab.coldSize.set(id, (lab.coldSize.get(id) || 0) + 1);
     const t = dnum(r.Date);
     if (t === null) continue;
     const prev = lab.coldSpan.get(id);
     if (prev === undefined || t > prev) lab.coldSpan.set(id, t);
   }
+}
+
+/* A sample label written anywhere else in the tool links into the Samples tab
+   as its whole cold episode: the swab that was clicked, plus every other swab
+   of the same illness. What else came out of that cold is nearly always the
+   question being asked of a sample, and the row clicked is still right there
+   in the answer. A sample with a blank `Cold`, or the only swab of its
+   episode, links as itself — filtering on `Cold` would show the same one row
+   and say something less true about it. results.js draws its sample links
+   the same way. */
+function sampleLink(label) {
+  const id = lab.colds.get(label);
+  return (id && !id.startsWith("untracked:") && lab.coldSize.get(id) > 1)
+    ? link(label, { tab: "inv-samples", spec: { Cold: [id] } },
+        `Every sample of the cold ${label} belongs to`)
+    : link(label, { tab: "inv-samples", spec: { Label: [label] } },
+        `${label} in samples.csv`);
 }
 
 // dir 0 on the samples Date column is the third click: group by cold episode
@@ -538,8 +558,7 @@ const views = {
     ],
     cell(td, c, row, val) {
       if (c.k === "Sample" && val) {
-        td.append(link(val, { tab: "inv-samples", spec: { Label: [val] } },
-          `${val} in samples.csv`));
+        td.append(sampleLink(val));
         return true;
       }
       // `Q2-NB03` is a sequencing.csv run and the barcode within it; the run is
@@ -794,9 +813,7 @@ const views = {
         // A pooled tube names its members with +, and each is a real sample.
         for (const s of val.split("+").map(x => x.trim()).filter(Boolean)) {
           if (td.childNodes.length) td.append("+");
-          td.append(lab.samples.has(s)
-            ? link(s, { tab: "inv-samples", spec: { Label: [s] } }, `${s} in samples.csv`)
-            : s);
+          td.append(lab.samples.has(s) ? sampleLink(s) : s);
         }
         return true;
       }

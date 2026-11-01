@@ -561,6 +561,15 @@ const views = {
         td.append(sampleLink(val));
         return true;
       }
+      /* A genotype or lineage is the question "what else was this?" — so it
+         filters this tab down to that type. It's an address rather than a
+         chip, so it lands on that type alone, with whatever else was filtered
+         cleared out. It always lands on a row: this one. */
+      if (c.k === "Type" && val) {
+        td.append(link(val, { tab: "inv-pathogens", spec: { Type: [val] } },
+          `Everything typed ${val}`));
+        return true;
+      }
       // `Q2-NB03` is a sequencing.csv run and the barcode within it; the run is
       // the half that identifies a row over there.
       if (c.k === "Sequenced" && val) {

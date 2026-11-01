@@ -1,10 +1,10 @@
-// Tests for public/tools/sequences.js — run with `npm test`.
+// Tests for sequences.js — run with `npm test`.
 //
 // The sequences are made up: the lab's own are in a private repository, and
 // these only need to be long enough that the right alignment is unambiguous.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import "../public/tools/sequences.js";
+import "../sequences.js";
 
 const S = globalThis.Sequences;
 
